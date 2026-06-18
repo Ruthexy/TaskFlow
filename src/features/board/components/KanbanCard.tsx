@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { Calendar, GripVertical } from 'lucide-react'
@@ -12,7 +13,11 @@ interface KanbanCardProps {
   isDragOverlay?: boolean
 }
 
-export function KanbanCard({ task, onClick, isDragOverlay }: KanbanCardProps) {
+export const KanbanCard = memo(function KanbanCard({
+  task,
+  onClick,
+  isDragOverlay = false,
+}: KanbanCardProps) {
   const {
     attributes,
     listeners,
@@ -24,7 +29,9 @@ export function KanbanCard({ task, onClick, isDragOverlay }: KanbanCardProps) {
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
+    // Suppress transition during active drag so the card follows the cursor
+    // instantly; re-enable it for the drop animation.
+    transition: isDragging ? undefined : transition,
   }
 
   return (
@@ -32,19 +39,40 @@ export function KanbanCard({ task, onClick, isDragOverlay }: KanbanCardProps) {
       ref={setNodeRef}
       style={style}
       className={cn(
-        'group rounded-lg border bg-background p-3 shadow-sm cursor-pointer',
-        'hover:shadow-md hover:border-primary/30 transition-all',
-        isDragging && 'opacity-40',
-        isDragOverlay && 'shadow-lg rotate-1 border-primary/30'
+        // Base card
+        'group relative rounded-lg border bg-background p-3 shadow-sm',
+        'transition-all duration-150 ease-out',
+        // Hover — only when not being dragged
+        !isDragging && !isDragOverlay && 'hover:shadow-md hover:border-primary/30',
+        // Ghost placeholder left behind during drag
+        isDragging && 'opacity-30 scale-[0.97] shadow-none',
+        // Floating overlay
+        isDragOverlay && [
+          'shadow-2xl border-primary/40',
+          'rotate-[1.5deg] scale-[1.04]',
+          'cursor-grabbing ring-2 ring-primary/20',
+        ]
       )}
-      onClick={() => onClick(task)}
+      onClick={() => {
+        if (!isDragging) onClick(task)
+      }}
     >
       <div className="flex items-start gap-2">
+        {/* Drag handle — whole-card drag via attributes+listeners lets touch
+            users grab anywhere; the grip icon is a desktop visual hint only. */}
         <button
           {...attributes}
           {...listeners}
-          className="mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground shrink-0"
+          aria-label="Drag to reorder"
+          className={cn(
+            'mt-0.5 shrink-0 rounded text-muted-foreground',
+            'opacity-0 group-hover:opacity-60 hover:opacity-100! transition-opacity',
+            'cursor-grab active:cursor-grabbing focus-visible:opacity-100 focus-visible:outline-none',
+            'focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1',
+            isDragOverlay && 'opacity-60'
+          )}
           onClick={(e) => e.stopPropagation()}
+          tabIndex={0}
         >
           <GripVertical className="h-4 w-4" />
         </button>
@@ -54,7 +82,9 @@ export function KanbanCard({ task, onClick, isDragOverlay }: KanbanCardProps) {
             <PriorityBadge priority={task.priority} />
           </div>
 
-          <p className="text-sm font-medium leading-snug mb-2">{task.title}</p>
+          <p className="text-sm font-medium leading-snug mb-2 line-clamp-2">
+            {task.title}
+          </p>
 
           {task.tags.length > 0 && (
             <div className="flex flex-wrap gap-1 mb-2">
@@ -70,24 +100,24 @@ export function KanbanCard({ task, onClick, isDragOverlay }: KanbanCardProps) {
           )}
 
           <div className="flex items-center justify-between mt-2">
-            {task.dueDate && (
+            {task.dueDate ? (
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                 <Calendar className="h-3 w-3" />
                 <span>{formatShortDate(task.dueDate)}</span>
               </div>
+            ) : (
+              <span />
             )}
-            <div className="ml-auto">
-              {task.assignee && (
-                <Avatar
-                  name={task.assignee.name}
-                  avatarUrl={task.assignee.avatarUrl}
-                  size="xs"
-                />
-              )}
-            </div>
+            {task.assignee && (
+              <Avatar
+                name={task.assignee.name}
+                avatarUrl={task.assignee.avatarUrl}
+                size="xs"
+              />
+            )}
           </div>
         </div>
       </div>
     </div>
   )
-}
+})
